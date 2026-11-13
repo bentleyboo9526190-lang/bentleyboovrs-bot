@@ -263,6 +263,28 @@ async def generate_speech(body: RequestBody) -> Response:
     return Response(content=result.content, media_type="audio/mpeg")
 
 
+
+@app.get("/nakama/status")
+async def nakama_status() -> dict:
+    """Report the status of the optional local Go-to-Nakama bridge."""
+    bridge_url = os.getenv("NAKAMA_BRIDGE_URL", "http://127.0.0.1:8081").rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            result = await client.get(f"{bridge_url}/status")
+        data = result.json()
+        if result.status_code >= 400:
+            return {
+                "connection": "unavailable",
+                "message": "The local Nakama bridge could not reach the project-owned Nakama server.",
+            }
+        return data
+    except (httpx.HTTPError, ValueError):
+        return {
+            "connection": "bridge_not_running",
+            "message": "Start the local Nakama server and Go bridge to enable this connection check.",
+        }
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True, "service": "BentleyBooVR Companion"}
