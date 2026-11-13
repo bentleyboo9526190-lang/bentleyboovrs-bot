@@ -57,3 +57,37 @@ A safe integration boundary is now included:
 - `POST /game/command` fails closed with HTTP 501 while no authorized game adapter exists. It does not send anything to Animal Company.
 
 At present, joining room `BENTLEYBOOVR`, controlling an avatar, reading live game state, and spawning items are **not implemented**. This requires an official integration or a modding API whose use is explicitly authorized by the game developer. The project will not use private backend endpoints, authentication/session tokens, traffic interception, or anti-cheat bypasses as a substitute.
+
+## Optional project-owned Nakama backend
+
+A separate local Nakama server and Go SDK bridge are now scaffolded:
+
+- `nakama/docker-compose.yml` starts Nakama plus its PostgreSQL database.
+- `nakama-bridge/` is a Go service using `github.com/ascii8/nakama-go`.
+- The Go bridge checks the Nakama server at `http://127.0.0.1:7350`.
+- `GET /nakama/status` on the Python companion reports whether that bridge can reach Nakama.
+
+### Start it on Windows
+
+1. Install Docker Desktop and Go 1.22 or newer.
+2. In PowerShell, start the database and Nakama server:
+
+   ```powershell
+   cd bentleyboovr/nakama
+   docker compose up -d
+   ```
+
+3. In a second PowerShell window, start the Go bridge:
+
+   ```powershell
+   cd bentleyboovr/nakama-bridge
+   go mod tidy
+   go run .
+   ```
+
+4. Start the Python companion as described above.
+5. Open `http://127.0.0.1:8000/nakama/status` to check the connection.
+
+The Nakama API and console ports are bound to localhost; PostgreSQL is internal to Docker. Keep this setup local and do not expose it to the public internet. The initial bridge only checks connectivity; it does not yet implement accounts, chat, presence, or matchmaking. This backend belongs to BentleyBooVR and is not connected to Animal Company.
+
+See [the bridge setup notes](nakama-bridge/README.md) for details.
