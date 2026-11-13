@@ -7,10 +7,12 @@ A local companion service for the BentleyBooVR Animal Company project.
 This first version provides:
 - A browser voice page at `/voice` with microphone speech recognition where the browser supports it.
 - Spoken responses using the browser's built-in speech synthesis.
+- A voice picker for voices installed on the device, plus adjustable pitch and speaking speed.
+- BentleyBooVR's companion-style response wording.
 - A request endpoint that repeats the user's requested action and asks for confirmation.
 - Yes/no confirmation buttons that record the decision.
 
-**Important:** The voice page uses your browser's speech features; it is not yet a custom deep AI voice. This prototype does not join Animal Company, control a player, or spawn game items. Those capabilities require an authorized, supported game integration. Do not add account passwords, session tokens, or private credentials to this repository.
+**Important:** The voice picker, pitch, and speed controls use voices supplied by the browser/device. They make the voice adjustable, but they do not create a custom deep AI voice. A true AI voice will need a separate speech provider and a securely stored server-side API key; never commit API keys to this public repository. This prototype does not join Animal Company, control a player, or spawn game items. Those capabilities require an authorized, supported game integration. Do not add account passwords, session tokens, or private credentials to this repository.
 
 ## Run on Windows
 
