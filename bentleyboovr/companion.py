@@ -75,7 +75,27 @@ def voice_page() -> str:
     <button id="yesButton">Yes</button>
     <button id="noButton">No</button>
   </div>
-  <script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+    import { getFirestore, doc, setDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+    let firebaseDb = null;
+    let firebaseUser = null;
+    try {
+      const configResponse = await fetch("/firebase/config");
+      const firebaseConfig = await configResponse.json();
+      if (configResponse.ok && firebaseConfig.enabled) {
+        const firebaseApp = initializeApp(firebaseConfig.config);
+        const firebaseAuth = getAuth(firebaseApp);
+        firebaseDb = getFirestore(firebaseApp);
+        const credentials = await signInAnonymously(firebaseAuth);
+        firebaseUser = credentials.user;
+      }
+    } catch (error) {
+      console.warn("Firebase is not connected; using local-only request storage.", error);
+    }
+
     const input = document.getElementById("requestText");
     const statusBox = document.getElementById("status");
     const heardBox = document.getElementById("heard");
@@ -186,6 +206,18 @@ def voice_page() -> str:
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "Request failed");
         pendingId = data.request_id;
+        if (firebaseDb && firebaseUser) {
+          try {
+            await setDoc(doc(firebaseDb, "users", firebaseUser.uid, "requests", pendingId), {
+              text,
+              status: "awaiting_confirmation",
+              createdAt: serverTimestamp()
+            });
+          } catch (error) {
+            console.warn("Could not save this request to Firestore.", error);
+            statusBox.textContent = "Request received, but cloud saving failed. Check Firestore rules.";
+          }
+        }
         heardBox.textContent = data.spoken_response;
         confirmBox.style.display = "block";
         statusBox.textContent = "Waiting for your yes or no.";
@@ -205,6 +237,16 @@ def voice_page() -> str:
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "Confirmation failed");
+        if (firebaseDb && firebaseUser) {
+          try {
+            await updateDoc(doc(firebaseDb, "users", firebaseUser.uid, "requests", pendingId), {
+              status: approved ? "approved" : "declined",
+              confirmedAt: serverTimestamp()
+            });
+          } catch (error) {
+            console.warn("Could not update the Firestore request status.", error);
+          }
+        }
         statusBox.textContent = data.message;
         speak(data.message);
         pendingId = null;
@@ -283,6 +325,19 @@ async def nakama_status() -> dict:
             "connection": "bridge_not_running",
             "message": "Start the local Nakama server and Go bridge to enable this connection check.",
         }
+
+
+@app.get("/firebase/config")
+def firebase_config() -> dict:
+    """Return only the public Firebase Web SDK configuration, never admin credentials."""
+    keys = {
+        "apiKey": os.getenv("FIREBASE_API_KEY"),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+        "projectId": os.getenv("FIREBASE_PROJECT_ID"),
+        "appId": os.getenv("FIREBASE_APP_ID"),
+    }
+    enabled = all(keys.values())
+    return {"enabled": enabled, "config": keys if enabled else None}
 
 
 @app.get("/health")
