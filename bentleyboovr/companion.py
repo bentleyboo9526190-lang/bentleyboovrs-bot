@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 app = FastAPI(
@@ -23,6 +24,129 @@ class RequestBody(BaseModel):
 class ConfirmationBody(BaseModel):
     request_id: str
     approved: bool
+
+
+@app.get("/voice", response_class=HTMLResponse)
+def voice_page() -> str:
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BentleyBooVR Voice</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 620px; margin: 40px auto; padding: 0 18px; background: #101827; color: #f4f7fb; }
+    h1 { margin-bottom: 8px; }
+    p { color: #c5d0df; }
+    button, input { font: inherit; border-radius: 10px; padding: 12px; margin: 6px 4px 6px 0; }
+    input { width: min(95%, 420px); }
+    button { border: 0; cursor: pointer; background: #8fc7ff; color: #102033; font-weight: 650; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    #status, #heard { padding: 12px; background: #1c2a3e; border-radius: 10px; min-height: 24px; }
+    #confirm { display: none; }
+  </style>
+</head>
+<body>
+  <h1>🐾 BentleyBooVR</h1>
+  <p>Voice prototype: say a request, hear it repeated, then choose yes or no.</p>
+  <input id="requestText" maxlength="300" placeholder="Type a request, or use the microphone">
+  <div>
+    <button id="micButton">🎙️ Speak</button>
+    <button id="sendButton">Send request</button>
+  </div>
+  <p id="status" role="status">Ready. Microphone access starts only when you press Speak.</p>
+  <p id="heard"></p>
+  <div id="confirm">
+    <p>Do you want this?</p>
+    <button id="yesButton">Yes</button>
+    <button id="noButton">No</button>
+  </div>
+  <script>
+    const input = document.getElementById("requestText");
+    const statusBox = document.getElementById("status");
+    const heardBox = document.getElementById("heard");
+    const confirmBox = document.getElementById("confirm");
+    let pendingId = null;
+
+    function speak(text) {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.92;
+        utterance.pitch = 0.85;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    document.getElementById("micButton").addEventListener("click", () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        statusBox.textContent = "Speech recognition is not supported in this browser. You can type a request instead.";
+        return;
+      }
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      statusBox.textContent = "Listening…";
+      recognition.onresult = event => {
+        input.value = event.results[0][0].transcript;
+        statusBox.textContent = "I heard: " + input.value;
+      };
+      recognition.onerror = event => statusBox.textContent = "Microphone issue: " + event.error;
+      recognition.onend = () => {
+        if (statusBox.textContent === "Listening…") statusBox.textContent = "Didn't catch that. Try again or type your request.";
+      };
+      recognition.start();
+    });
+
+    document.getElementById("sendButton").addEventListener("click", async () => {
+      const text = input.value.trim();
+      if (!text) {
+        statusBox.textContent = "Please say or type a request first.";
+        return;
+      }
+      try {
+        const response = await fetch("/request", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({text})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Request failed");
+        pendingId = data.request_id;
+        heardBox.textContent = data.spoken_response;
+        confirmBox.style.display = "block";
+        statusBox.textContent = "Waiting for your yes or no.";
+        speak(data.spoken_response);
+      } catch (error) {
+        statusBox.textContent = "Could not contact BentleyBooVR: " + error.message;
+      }
+    });
+
+    async function confirm(approved) {
+      if (!pendingId) return;
+      try {
+        const response = await fetch("/confirm", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({request_id: pendingId, approved})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Confirmation failed");
+        statusBox.textContent = data.message;
+        speak(data.message);
+        pendingId = null;
+        confirmBox.style.display = "none";
+      } catch (error) {
+        statusBox.textContent = "Could not save your answer: " + error.message;
+      }
+    }
+    document.getElementById("yesButton").addEventListener("click", () => confirm(true));
+    document.getElementById("noButton").addEventListener("click", () => confirm(false));
+  </script>
+</body>
+</html>"""
 
 
 @app.get("/health")
