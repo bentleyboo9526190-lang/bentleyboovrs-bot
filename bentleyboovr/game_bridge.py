@@ -45,3 +45,9 @@ def game_command(command: GameCommand) -> None:
             "integration is configured. No in-game action was performed."
         ),
     )
+
+
+# The AI chat companion is a separate local web feature; it does not control the game.
+from ai_chat import router as ai_chat_router
+
+router.include_router(ai_chat_router)
