@@ -6,28 +6,32 @@
 
 It is a **client SDK**, not a Nakama server, Unity/Quest mod loader, Animal Company plugin, or tool for joining an unrelated game's servers.
 
-## What it could do for this project
+## What is now in the repository
 
-If BentleyBooVR later runs its own Nakama server, a small Go service using this SDK could provide project-owned features such as:
-- BentleyBooVR companion chat rooms.
-- Presence for people using the companion app.
-- Realtime messages between the companion UI and the PC-hosted bot.
-- Project-owned sessions or matchmaking for a separate BentleyBooVR experience.
+The first local backend scaffold is committed:
 
-The existing companion is a Python/FastAPI app. This Go SDK cannot be installed through Python's `requirements.txt`; it would need a separate Go component, plus a Nakama server to connect to. Neither is configured by this design note.
+- `nakama/docker-compose.yml` starts a project-owned Nakama server and PostgreSQL database.
+- `nakama-bridge/` is a Go service using `ascii8/nakama-go`.
+- The Go bridge checks the local Nakama health endpoint.
+- The Python companion exposes `GET /nakama/status` to report whether the bridge can reach Nakama.
+
+This is a connectivity foundation only. It does not yet create user accounts, chat rooms, presence, or matchmaking. The server and bridge must still be started on the user's Windows PC before a live connection can be verified.
+
+## Safe local setup
+
+See [the main README](README.md) and [the Go bridge README](nakama-bridge/README.md) for the Windows setup steps.
+
+The Docker Compose ports are bound to localhost, and PostgreSQL is not published outside the Docker network. Keep this as a local development environment; do not expose it publicly or put credentials/tokens in source control.
 
 ## Animal Company boundary
 
-Nakama only connects to a Nakama server that is configured for it. Adding this SDK does not make BentleyBooVR an Animal Company player, does not provide access to Animal Company rooms, and does not create an in-game NPC. Those would require an official integration or explicit authorization from the game developer.
+This Nakama instance belongs to BentleyBooVR. It does not connect to Animal Company's backend, does not make BentleyBooVR an Animal Company player, does not provide access to Animal Company rooms, and does not create an in-game NPC. Those would require an official integration or explicit authorization from the game developer.
 
 Do not point this client at private game services, use game-account credentials or session tokens, imitate the game's private protocol, or attempt to bypass access controls.
 
-## Suggested development order
+## Next development steps
 
-1. Keep the current Python companion working independently.
-2. If a separate BentleyBooVR companion backend is wanted, set up a Nakama server owned by this project.
-3. Add a small Go service using `ascii8/nakama-go` to connect to that project-owned server.
-4. Connect the companion UI to that service using documented project APIs.
-5. Keep all game-facing features disabled unless an authorized Animal Company integration becomes available.
-
-No Nakama connection or Animal Company connection is active yet.
+1. Run the local Nakama server and Go bridge, then verify `/nakama/status`.
+2. Design a separate BentleyBooVR identity and account flow.
+3. Add project-owned chat/presence features using Nakama's documented APIs.
+4. Keep all game-facing features disabled unless an authorized Animal Company integration becomes available.
