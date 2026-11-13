@@ -311,3 +311,10 @@ def confirm_request(body: ConfirmationBody) -> dict:
     }
     del pending_requests[body.request_id]
     return result
+
+
+# Animal Company game bridge: safe status reporting only until an authorized
+# integration is available. It never sends commands to the game.
+from game_bridge import router as game_router
+
+app.include_router(game_router)
