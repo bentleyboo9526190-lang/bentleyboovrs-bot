@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 from uuid import uuid4
 
+import httpx
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 app = FastAPI(
@@ -51,7 +53,7 @@ def voice_page() -> str:
 </head>
 <body>
   <h1>🐾 BentleyBooVR</h1>
-  <p>Voice prototype: say a request, hear it repeated, then choose yes or no.</p>
+  <p>AI-generated voice prototype: say a request, hear BentleyBooVR repeat it, then choose yes or no.</p>
   <input id="requestText" maxlength="300" placeholder="Type a request, or use the microphone">
   <div class="settings">
     <strong>Voice settings</strong>
@@ -106,17 +108,44 @@ def voice_page() -> str:
       window.speechSynthesis.onvoiceschanged = loadVoices;
     }
 
-    function speak(text) {
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = Number(rateControl.value);
-        utterance.pitch = Number(pitchControl.value);
-        const voices = window.speechSynthesis.getVoices();
-        if (voiceSelect.value !== "" && voices[Number(voiceSelect.value)]) {
-          utterance.voice = voices[Number(voiceSelect.value)];
+    let currentAudio = null;
+    async function speak(text) {
+      if (currentAudio) {
+        currentAudio.pause();
+        URL.revokeObjectURL(currentAudio.src);
+        currentAudio = null;
+      }
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      try {
+        const response = await fetch("/speech", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({text})
+        });
+        if (!response.ok) {
+          const problem = await response.json().catch(() => ({}));
+          throw new Error(problem.detail || "AI voice is not configured");
         }
-        window.speechSynthesis.speak(utterance);
+        const audioBlob = await response.blob();
+        currentAudio = new Audio(URL.createObjectURL(audioBlob));
+        currentAudio.onended = () => {
+          if (currentAudio) URL.revokeObjectURL(currentAudio.src);
+          currentAudio = null;
+        };
+        await currentAudio.play();
+        statusBox.textContent = "Speaking with BentleyBooVR's AI voice. This voice is AI-generated.";
+      } catch (error) {
+        statusBox.textContent = error.message + ". Using your device voice instead.";
+        if ("speechSynthesis" in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.rate = Number(rateControl.value);
+          utterance.pitch = Number(pitchControl.value);
+          const voices = window.speechSynthesis.getVoices();
+          if (voiceSelect.value !== "" && voices[Number(voiceSelect.value)]) {
+            utterance.voice = voices[Number(voiceSelect.value)];
+          }
+          window.speechSynthesis.speak(utterance);
+        }
       }
     }
 
@@ -189,6 +218,49 @@ def voice_page() -> str:
   </script>
 </body>
 </html>"""
+
+
+@app.post("/speech")
+async def generate_speech(body: RequestBody) -> Response:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="AI voice is not configured. Set OPENAI_API_KEY on the computer running BentleyBooVR.",
+        )
+
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Speech text cannot be empty.")
+
+    payload = {
+        "model": "gpt-4o-mini-tts",
+        "voice": "onyx",
+        "input": text[:1200],
+        "instructions": (
+            "Speak as BentleyBooVR, a friendly gaming companion. Use a warm, "
+            "confident, lower-register voice, clear pronunciation, and a relaxed pace. "
+            "Do not sound angry or intimidating."
+        ),
+        "response_format": "mp3",
+    }
+    headers = {"Authorization": f"Bearer {api_key}"}
+    try:
+        async with httpx.AsyncClient(timeout=35.0) as client:
+            result = await client.post(
+                "https://api.openai.com/v1/audio/speech",
+                headers=headers,
+                json=payload,
+            )
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="The AI voice service could not be reached.")
+
+    if result.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail="The AI voice service returned an error. Check the server configuration and API account.",
+        )
+    return Response(content=result.content, media_type="audio/mpeg")
 
 
 @app.get("/health")
