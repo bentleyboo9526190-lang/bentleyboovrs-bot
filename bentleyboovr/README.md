@@ -47,3 +47,13 @@ This first version provides:
 8. Open http://127.0.0.1:8000/docs to inspect the API.
 
 The service listens only on the PC itself by default. Keep it that way for the first test; don't expose it to the public internet.
+
+
+## Animal Company game layer
+
+A safe integration boundary is now included:
+
+- `GET /game/status` reports which game capabilities are actually available.
+- `POST /game/command` fails closed with HTTP 501 while no authorized game adapter exists. It does not send anything to Animal Company.
+
+At present, joining room `BENTLEYBOOVR`, controlling an avatar, reading live game state, and spawning items are **not implemented**. This requires an official integration or a modding API whose use is explicitly authorized by the game developer. The project will not use private backend endpoints, authentication/session tokens, traffic interception, or anti-cheat bypasses as a substitute.
