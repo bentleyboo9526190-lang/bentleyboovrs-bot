@@ -44,12 +44,24 @@ def voice_page() -> str:
     button:disabled { opacity: .45; cursor: not-allowed; }
     #status, #heard { padding: 12px; background: #1c2a3e; border-radius: 10px; min-height: 24px; }
     #confirm { display: none; }
+    .settings { margin: 18px 0; padding: 14px; background: #1c2a3e; border-radius: 10px; }
+    label { display: block; margin: 8px 0; color: #dce7f5; }
+    select { font: inherit; padding: 8px; border-radius: 8px; max-width: 100%; }
   </style>
 </head>
 <body>
   <h1>🐾 BentleyBooVR</h1>
   <p>Voice prototype: say a request, hear it repeated, then choose yes or no.</p>
   <input id="requestText" maxlength="300" placeholder="Type a request, or use the microphone">
+  <div class="settings">
+    <strong>Voice settings</strong>
+    <label for="voiceSelect">Device voice</label>
+    <select id="voiceSelect"><option value="">Loading available voices…</option></select>
+    <label for="pitch">Pitch: <span id="pitchValue">0.75</span></label>
+    <input id="pitch" type="range" min="0.5" max="1.2" step="0.05" value="0.75">
+    <label for="rate">Speaking speed: <span id="rateValue">0.9</span></label>
+    <input id="rate" type="range" min="0.7" max="1.1" step="0.05" value="0.9">
+  </div>
   <div>
     <button id="micButton">🎙️ Speak</button>
     <button id="sendButton">Send request</button>
@@ -67,13 +79,43 @@ def voice_page() -> str:
     const heardBox = document.getElementById("heard");
     const confirmBox = document.getElementById("confirm");
     let pendingId = null;
+    const voiceSelect = document.getElementById("voiceSelect");
+    const pitchControl = document.getElementById("pitch");
+    const rateControl = document.getElementById("rate");
+    document.getElementById("pitchValue").textContent = pitchControl.value;
+    document.getElementById("rateValue").textContent = rateControl.value;
+    pitchControl.addEventListener("input", () => document.getElementById("pitchValue").textContent = pitchControl.value);
+    rateControl.addEventListener("input", () => document.getElementById("rateValue").textContent = rateControl.value);
+
+    function loadVoices() {
+      if (!("speechSynthesis" in window)) {
+        voiceSelect.innerHTML = '<option value="">Speech output unavailable</option>';
+        return;
+      }
+      const voices = window.speechSynthesis.getVoices();
+      voiceSelect.innerHTML = '<option value="">System default voice</option>';
+      voices.forEach((voice, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = voice.name + " (" + voice.lang + ")";
+        voiceSelect.appendChild(option);
+      });
+    }
+    if ("speechSynthesis" in window) {
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
 
     function speak(text) {
       if ("speechSynthesis" in window) {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.92;
-        utterance.pitch = 0.85;
+        utterance.rate = Number(rateControl.value);
+        utterance.pitch = Number(pitchControl.value);
+        const voices = window.speechSynthesis.getVoices();
+        if (voiceSelect.value !== "" && voices[Number(voiceSelect.value)]) {
+          utterance.voice = voices[Number(voiceSelect.value)];
+        }
         window.speechSynthesis.speak(utterance);
       }
     }
@@ -170,7 +212,7 @@ def create_request(body: RequestBody) -> dict:
     return {
         "request_id": request_id,
         "heard": requested_action,
-        "spoken_response": f"You asked me to {requested_action}. Do you want this?",
+        "spoken_response": f"BentleyBooVR here. I heard your request: {requested_action}. Should I proceed?",
         "status": "awaiting_confirmation",
     }
 
