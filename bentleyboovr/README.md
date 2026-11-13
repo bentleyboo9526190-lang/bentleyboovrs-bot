@@ -6,13 +6,13 @@ A local companion service for the BentleyBooVR Animal Company project.
 
 This first version provides:
 - A browser voice page at `/voice` with microphone speech recognition where the browser supports it.
-- Spoken responses using the browser's built-in speech synthesis.
-- A voice picker for voices installed on the device, plus adjustable pitch and speaking speed.
+- Optional AI-generated spoken replies through a server-side speech endpoint, using a lower-register voice style.
+- Device speech fallback with a voice picker and adjustable pitch/speed if AI speech is not configured.
 - BentleyBooVR's companion-style response wording.
 - A request endpoint that repeats the user's requested action and asks for confirmation.
 - Yes/no confirmation buttons that record the decision.
 
-**Important:** The voice picker, pitch, and speed controls use voices supplied by the browser/device. They make the voice adjustable, but they do not create a custom deep AI voice. A true AI voice will need a separate speech provider and a securely stored server-side API key; never commit API keys to this public repository. This prototype does not join Animal Company, control a player, or spawn game items. Those capabilities require an authorized, supported game integration. Do not add account passwords, session tokens, or private credentials to this repository.
+**Important:** The AI speech endpoint uses OpenAI's Speech API and the `gpt-4o-mini-tts` model with the `onyx` voice and a lower-register delivery instruction. OpenAI currently lists this model as deprecated with a scheduled shutdown on January 6, 2027; this is a temporary integration that will need migration to the Realtime API before then. See the [official text-to-speech guide](https://developers.openai.com/api/docs/guides/text-to-speech). The audio is AI-generated and the page labels it as such. Never commit API keys to this public repository. This prototype does not join Animal Company, control a player, or spawn game items. Those capabilities require an authorized, supported game integration. Do not add account passwords, session tokens, or private credentials to this repository.
 
 ## Run on Windows
 
@@ -31,13 +31,19 @@ This first version provides:
    py -m pip install -r requirements.txt
    ```
 
-5. Start the local service:
+5. (Optional) Configure the AI voice key in this PowerShell window. Keep the key private; do not paste it into GitHub, chat, or source code. If you do not have an API account/key, ask a parent or guardian to help with account and billing decisions. The browser voice fallback still works without this setting.
+
+   ```powershell
+   $env:OPENAI_API_KEY = "paste-your-private-key-here"
+   ```
+
+6. Start the local service:
 
    ```powershell
    py -m uvicorn companion:app --host 127.0.0.1 --port 8000
    ```
 
-6. Open http://127.0.0.1:8000/voice to try the voice page. If microphone recognition is unavailable in your browser, type a request instead.
-7. Open http://127.0.0.1:8000/docs to inspect the API.
+7. Open http://127.0.0.1:8000/voice to try the voice page. If AI speech is not configured, it falls back to the device voice. If microphone recognition is unavailable in your browser, type a request instead.
+8. Open http://127.0.0.1:8000/docs to inspect the API.
 
 The service listens only on the PC itself by default. Keep it that way for the first test; don't expose it to the public internet.
